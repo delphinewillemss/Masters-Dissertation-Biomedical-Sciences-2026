@@ -1,0 +1,37 @@
+#!/bin/bash
+#SBATCH --job-name=hmmcopy_readcounts.job
+#SBATCH --array=1-86
+#SBATCH --cpus-per-task=1
+#SBATCH --mem=8G
+#SBATCH --time=24:00:00
+
+#SBATCH --output=/scratch/gent/vo/002/gvo00207/vsc52059/hmmcopy/logs/%A_%a.out
+#SBATCH --error=/scratch/gent/vo/002/gvo00207/vsc52059/hmmcopy/logs/%A_%a.err
+
+BAM_LIST="/scratch/gent/vo/002/gvo00207/vsc52059/hmmcopy_bamlist.txt"
+
+READCOUNTER="/scratch/gent/vo/002/gvo00207/vsc52059/hmmcopy_utils/bin/readCounter"
+
+OUTDIR="/scratch/gent/vo/002/gvo00207/vsc52059/hmmcopy/readcounts"
+
+mkdir -p "${OUTDIR}"
+mkdir -p "/scratch/gent/vo/002/gvo00207/vsc52059/hmmcopy/logs"
+
+bam=$(sed -n "${SLURM_ARRAY_TASK_ID}p" "${BAM_LIST}")
+
+filename=$(basename "${bam}")
+
+sample=${filename%.sorted.bam}
+sample=${sample%_sorted.bam}
+sample=${sample%_sorted_chrM.bam}
+
+echo "$(date) Processing ${sample}"
+
+"${READCOUNTER}" \
+    -w 500000 \
+    -q 20 \
+    -c chr1,chr2,chr3,chr4,chr5,chr6,chr7,chr8,chr9,chr10,chr11,chr12,chr13,chr14,chr15,chr16,chr17,chr18,chr19,chrX,chrY \
+    "${bam}" \
+    > "${OUTDIR}/${sample}.wig"
+
+echo "$(date) Finished ${sample}"
