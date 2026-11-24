@@ -4,7 +4,7 @@
 #SBATCH --cpus-per-task=1
 #SBATCH --mem=28G
 #SBATCH --time=24:00:00
-#SBATCH --array=0-11
+#SBATCH --array=0-20
 #SBATCH --output=logs/%x_%A_%a.out
 #SBATCH --error=logs/%x_%A_%a.err
 
@@ -15,13 +15,13 @@ module load R/4.6.1-gfbf-2026.1
 
 mkdir -p logs
 
-BAM_DIR="/scratch/gent/vo/002/gvo00207/vsc52059/Nextflow_pipeline/results/preprocessing/mapped"
-OUT_DIR="/scratch/gent/vo/002/gvo00207/vsc52059/Nextflow_pipeline/QDNAseq"
+BAM_DIR="/data/gent/vo/002/gvo00207/shared/UDI_KAPA_HyperCap_20260127_162250_2"
+OUT_DIR="/scratch/gent/vo/002/gvo00207/vsc52059/QDNAseq_HyperCap"
 
 mkdir -p "$OUT_DIR"
 
-## submappen per sample (bv. GGS20260324_1/), daarin het *sorted.bam
-bamfiles=($(find "$BAM_DIR" -mindepth 2 -maxdepth 2 -name "*sorted.bam" | sort))
+## submappen per sample (bv. GGS20260324_1/), daarin het *sorted.bam of allemaal tesamen in 1 map? (pas aan naargelang input files)
+bamfiles=($(find "$BAM_DIR" -maxdepth 1 -type f -name "*sorted.bam" | sort))
 
 bam=${bamfiles[$SLURM_ARRAY_TASK_ID]}
 

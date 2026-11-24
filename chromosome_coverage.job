@@ -1,0 +1,124 @@
+## dit berekent de totale coverage per chromosoom voor elke sample (chromosoom X, Y en M ook inbegrepen) --> NIET hetzelfde als aantal unieke reads per chromosoom! (Een read die bijvoorbeeld 100 nucleotideposities overlapt, draagt bij aan de coverage op elk van die 100 posities)
+#!/usr/bin/env bash
+#SBATCH --job-name=chrom_cov
+#SBATCH --chdir=/scratch/gent/vo/002/gvo00207/vsc52059
+#SBATCH --output=/scratch/gent/vo/002/gvo00207/vsc52059/error/mm10_depth_%A_%a.out
+#SBATCH --error=/scratch/gent/vo/002/gvo00207/vsc52059/error/mm10_depth_%A_%a.err
+#SBATCH --array=1-107%10
+#SBATCH --time=12:00:00
+#SBATCH --mem=4G
+#SBATCH --cpus-per-task=1 
+
+set -Eeuo pipefail
+
+BASE="/scratch/gent/vo/002/gvo00207/vsc52059"
+BAM_ROOT="$BASE/all_bams"
+OUT_DIR="$BASE/chromosome_coverage"
+RESULT_DIR="$OUT_DIR/sample_results"
+ERROR_DIR="$BASE/error"
+THREADS="${SLURM_CPUS_PER_TASK:-1}"
+
+mkdir -p "$OUT_DIR" "$RESULT_DIR" "$ERROR_DIR"
+
+fail_task() {
+    local message="$1"
+    printf '%s\n' "$message" > "$ERROR_DIR/task_${SLURM_ARRAY_TASK_ID}.failed"
+    echo "ERROR: $message" >&2
+    exit 1
+}
+
+command -v samtools >/dev/null 2>&1 || fail_task "samtools not found"
+
+[[ -d "$BAM_ROOT" ]] || fail_task "BAM directory not found"
+
+# Find all sample directories
+mapfile -t SAMPLE_DIRS < <(
+    find "$BAM_ROOT" -mindepth 1 -maxdepth 1 -type d | sort
+)
+
+TASK_ID="${SLURM_ARRAY_TASK_ID:?Missing array task ID}"
+
+(( TASK_ID >= 1 && TASK_ID <= ${#SAMPLE_DIRS[@]} )) ||
+    fail_task "Invalid sample number: $TASK_ID"
+
+SAMPLE_DIR="${SAMPLE_DIRS[$((TASK_ID - 1))]}"
+SAMPLE="$(basename "$SAMPLE_DIR")"
+
+RESULT="$RESULT_DIR/${SAMPLE}.tsv"
+TMP_RESULT="$RESULT_DIR/.${SAMPLE}.${SLURM_JOB_ID}.tmp"
+SAMTOOLS_LOG="$ERROR_DIR/${SAMPLE}.samtools.log"
+FAILED_MARKER="$ERROR_DIR/${SAMPLE}.failed"
+
+rm -f "$TMP_RESULT" "$FAILED_MARKER"
+
+# Find BAM file
+mapfile -t BAMS < <(
+    find "$SAMPLE_DIR" -maxdepth 1 -type f -name '*.bam' | sort
+)
+
+if [[ ${#BAMS[@]} -ne 1 ]]; then
+    fail_task "$SAMPLE: expected exactly one BAM file"
+fi
+
+BAM="${BAMS[0]}"
+
+# Check BAM index
+if [[ ! -f "$BAM.bai" && ! -f "${BAM%.bam}.bai" ]]; then
+    fail_task "$SAMPLE: BAM index missing"
+fi
+
+echo "[$SAMPLE] Starting samtools depth"
+
+# Calculate coverage and summarize per chromosome
+if samtools depth -aa -@ "$THREADS" "$BAM" 2>"$SAMTOOLS_LOG" |
+    awk -v sample="$SAMPLE" '
+    BEGIN {
+        split("chr1 chr2 chr3 chr4 chr5 chr6 chr7 chr8 chr9 chr10 chr11 chr12 chr13 chr14 chr15 chr16 chr17 chr18 chr19 chrX chrY chrM", c, " ")
+
+        for (i=1; i<=22; i++)
+            wanted[c[i]]=1
+    }
+
+    ($1 in wanted) {
+        n[$1]++
+        total[$1]+=$3
+
+        if ($3 > 0)
+            covered[$1]++
+    }
+
+    END {
+        for (i=1; i<=22; i++) {
+            chrom=c[i]
+
+            if (n[chrom] > 0) {
+                printf "%s\t%s\t%.0f\t%.6f\t%d\t%d\n",
+                sample, chrom, total[chrom],
+                total[chrom]/n[chrom],
+                covered[chrom]+0, n[chrom]
+            }
+            else {
+                printf "%s\t%s\tNA\tNA\tNA\t0\n",
+                sample, chrom
+            }
+        }
+    }
+    ' > "$TMP_RESULT"
+then
+
+    mv "$TMP_RESULT" "$RESULT"
+
+    echo "[$SAMPLE] Finished successfully"
+
+else
+
+    rm -f "$TMP_RESULT" "$RESULT"
+
+    printf '%s\n' \
+    "$SAMPLE: samtools depth failed. Check $SAMTOOLS_LOG" \
+    > "$FAILED_MARKER"
+
+    echo "ERROR: $SAMPLE failed" >&2
+    exit 1
+
+fi

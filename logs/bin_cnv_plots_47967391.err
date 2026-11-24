@@ -1,0 +1,19 @@
+The following modules were not unloaded:
+  (Use "module --force purge" to unload all):
+
+  1) env/vsc/skiddo     3) env/software/skiddo
+  2) env/slurm/skiddo   4) cluster/skiddo
+
+Attaching package: ‘dplyr’
+
+The following objects are masked from ‘package:stats’:
+
+    filter, lag
+
+The following objects are masked from ‘package:base’:
+
+    intersect, setdiff, setequal, union
+
+Warning message:
+No shared levels found between `names(values)` of the manual scale and the
+data's colour values. 

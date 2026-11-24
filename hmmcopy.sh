@@ -41,7 +41,7 @@ submit)
   [ $START -le 1 ] && submit_job split     afterok  "s1_split_%j.out"        --cpus-per-task=1 --mem=4G --time=00:30:00
   [ $START -le 2 ] && submit_job map       afterok  "s2_map_%A_%a.out"       --cpus-per-task=1 --mem=8G --time=02:00:00 --array=1-21
   [ $START -le 3 ] && submit_job mergemap  afterok  "s3_mergemap_%j.out"     --cpus-per-task=1 --mem=4G --time=00:20:00
-  [ $START -le 4 ] && submit_job hmmcopy   afterok  "s4_hmmcopy_%A_%a.out"   --cpus-per-task=1 --mem=8G --time=01:00:00 --array=1-86%20
+  [ $START -le 4 ] && submit_job hmmcopy   afterok  "s4_hmmcopy_%A_%a.out"   --cpus-per-task=1 --mem=8G --time=01:00:00 --array=1-107%20
   [ $START -le 5 ] && submit_job merge     afterany "s5_merge_%j.out"        --cpus-per-task=1 --mem=2G --time=00:10:00
   [ $START -le 6 ] && submit_job plots     afterany "s6_plots_%j.out"        --cpus-per-task=1 --mem=4G --time=00:30:00
   echo "Alles ingediend. Volgen met: squeue -u \$USER"

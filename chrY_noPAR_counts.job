@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+#SBATCH --job-name=chrY_counts
+#SBATCH --chdir=/scratch/gent/vo/002/gvo00207/vsc52059
+#SBATCH --output=/scratch/gent/vo/002/gvo00207/vsc52059/error/chrY_counts_%A_%a.out
+#SBATCH --error=/scratch/gent/vo/002/gvo00207/vsc52059/error/chrY_counts_%A_%a.err
+#SBATCH --array=1-107%10
+#SBATCH --time=01:00:00
+#SBATCH --mem=2G
+#SBATCH --cpus-per-task=1
+
+set -Eeuo pipefail
+
+BASE="/scratch/gent/vo/002/gvo00207/vsc52059"
+BAM_ROOT="$BASE/all_bams"
+BED="$BASE/regions_mm10/chrY_noPAR.bed" 
+OUT_DIR="$BASE/chrY_noPAR_counts"
+RESULT_DIR="$OUT_DIR/sample_results"
+ERROR_DIR="$BASE/error"
+
+mkdir -p "$RESULT_DIR" "$ERROR_DIR"
+
+fail_task() {
+    printf '%s\n' "$1" > "$ERROR_DIR/chrY_task_${SLURM_ARRAY_TASK_ID}.failed"
+    echo "ERROR: $1" >&2
+    exit 1
+}
+
+command -v samtools >/dev/null 2>&1 || fail_task "samtools not found"
+[[ -f "$BED" ]] || fail_task "BED file not found: $BED"
+
+mapfile -t SAMPLE_DIRS < <(find "$BAM_ROOT" -mindepth 1 -maxdepth 1 -type d | sort)
+
+TASK_ID="${SLURM_ARRAY_TASK_ID:?Missing array task ID}"
+(( TASK_ID >= 1 && TASK_ID <= ${#SAMPLE_DIRS[@]} )) || fail_task "Invalid sample number: $TASK_ID"
+
+SAMPLE_DIR="${SAMPLE_DIRS[$((TASK_ID - 1))]}"
+SAMPLE="$(basename "$SAMPLE_DIR")"
+
+mapfile -t BAMS < <(find "$SAMPLE_DIR" -maxdepth 1 -type f -name '*sorted.bam' | sort)
+[[ ${#BAMS[@]} -eq 1 ]] || fail_task "$SAMPLE: expected exactly one sorted.bam"
+BAM="${BAMS[0]}"
+
+[[ -f "$BAM.bai" || -f "${BAM%.bam}.bai" ]] || fail_task "$SAMPLE: BAM index missing"
+
+echo "[$SAMPLE] Counting reads in chrY_noPAR"
+
+N=$(samtools view -c -F 0xD04 -L "$BED" "$BAM")
+
+printf '%s\t%s\n' "$SAMPLE" "$N" > "$RESULT_DIR/${SAMPLE}.tsv"
+echo "[$SAMPLE] Done: $N reads" 

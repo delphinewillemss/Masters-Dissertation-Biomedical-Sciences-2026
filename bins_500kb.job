@@ -1,0 +1,66 @@
+#!/usr/bin/env bash
+#SBATCH --job-name=bins_500kb.job
+#SBATCH --chdir=/scratch/gent/vo/002/gvo00207/vsc52059
+#SBATCH --output=/scratch/gent/vo/002/gvo00207/vsc52059/error/bins_%A_%a.out
+#SBATCH --error=/scratch/gent/vo/002/gvo00207/vsc52059/error/bins_%A_%a.err
+#SBATCH --array=1-107%10
+#SBATCH --time=04:00:00
+#SBATCH --mem=4G
+#SBATCH --cpus-per-task=1
+
+set -Eeuo pipefail
+
+module load SAMtools/1.21-GCC-13.3.0
+module load BEDTools/2.31.1-GCC-13.3.0
+
+BASE="/scratch/gent/vo/002/gvo00207/vsc52059"
+BAM_ROOT="$BASE/all_bams"
+BINS="$BASE/bin_counts/bins_500kb.bed"
+RESULT_DIR="$BASE/bin_counts/sample_results"
+ERROR_DIR="$BASE/error"
+
+mkdir -p "$RESULT_DIR" "$ERROR_DIR"
+
+fail_task() {
+    printf '%s\n' "$1" > "$ERROR_DIR/bins_task_${SLURM_ARRAY_TASK_ID}.failed"
+    echo "ERROR: $1" >&2
+    exit 1
+}
+
+command -v samtools >/dev/null 2>&1 || fail_task "samtools not found"
+command -v bedtools >/dev/null 2>&1 || fail_task "bedtools not found"
+[[ -f "$BINS" ]] || fail_task "bins file not found"
+
+mapfile -t SAMPLE_DIRS < <(find "$BAM_ROOT" -mindepth 1 -maxdepth 1 -type d | sort)
+TASK_ID="${SLURM_ARRAY_TASK_ID:?Missing array task ID}"
+(( TASK_ID >= 1 && TASK_ID <= ${#SAMPLE_DIRS[@]} )) || fail_task "Invalid sample number: $TASK_ID"
+
+SAMPLE_DIR="${SAMPLE_DIRS[$((TASK_ID - 1))]}"
+SAMPLE="$(basename "$SAMPLE_DIR")"
+
+mapfile -t BAMS < <(find "$SAMPLE_DIR" -maxdepth 1 -type f -name '*sorted.bam' | sort)
+[[ ${#BAMS[@]} -eq 1 ]] || fail_task "$SAMPLE: expected exactly one sorted.bam"
+BAM="${BAMS[0]}"
+
+TMPG="$RESULT_DIR/.${SAMPLE}.${SLURM_JOB_ID}.genome"
+TMPB="$RESULT_DIR/.${SAMPLE}.${SLURM_JOB_ID}.bed"
+TMP="$RESULT_DIR/.${SAMPLE}.${SLURM_JOB_ID}.tmp"
+
+# chromosoomvolgorde en -lengtes uit de header van dit BAM-bestand
+samtools view -H "$BAM" \
+  | awk -F'\t' '$1=="@SQ"{split($2,a,":"); split($3,b,":"); print a[2]"\t"b[2]}' \
+  | grep -E '^chr([0-9]+|X|Y)[[:space:]]' > "$TMPG"
+
+# bins in dezelfde volgorde zetten
+awk 'NR==FNR{o[$1]=NR; next} ($1 in o){print o[$1]"\t"$0}' "$TMPG" "$BINS" \
+  | sort -k1,1n -k3,3n | cut -f2- > "$TMPB"
+
+samtools view -u -F 0xD04 -q 20 -L "$BINS" "$BAM" \
+  | bedtools coverage -sorted -g "$TMPG" -counts -a "$TMPB" -b stdin \
+  | awk -v s="$SAMPLE" 'BEGIN{OFS="\t"} {print s,$1,$2,$3,$4}' \
+  > "$TMP"
+
+mv "$TMP" "$RESULT_DIR/${SAMPLE}.tsv"
+rm -f "$TMPG" "$TMPB"
+
+echo "[$SAMPLE] Done" 

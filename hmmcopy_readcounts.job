@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=hmmcopy_readcounts.job
-#SBATCH --array=1-86
+#SBATCH --array=1-21
 #SBATCH --cpus-per-task=1
 #SBATCH --mem=8G
 #SBATCH --time=24:00:00
@@ -8,7 +8,7 @@
 #SBATCH --output=/scratch/gent/vo/002/gvo00207/vsc52059/hmmcopy/logs/%A_%a.out
 #SBATCH --error=/scratch/gent/vo/002/gvo00207/vsc52059/hmmcopy/logs/%A_%a.err
 
-BAM_LIST="/scratch/gent/vo/002/gvo00207/vsc52059/hmmcopy_bamlist.txt"
+BAM_LIST="/scratch/gent/vo/002/gvo00207/vsc52059/bamlist_hypercap.txt"
 
 READCOUNTER="/scratch/gent/vo/002/gvo00207/vsc52059/hmmcopy_utils/bin/readCounter"
 
