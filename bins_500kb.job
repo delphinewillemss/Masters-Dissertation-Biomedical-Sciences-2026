@@ -33,7 +33,7 @@ command -v bedtools >/dev/null 2>&1 || fail_task "bedtools not found"
 
 mapfile -t SAMPLE_DIRS < <(find "$BAM_ROOT" -mindepth 1 -maxdepth 1 -type d | sort)
 TASK_ID="${SLURM_ARRAY_TASK_ID:?Missing array task ID}"
-(( TASK_ID >= 1 && TASK_ID <= ${#SAMPLE_DIRS[@]} )) || fail_task "Invalid sample number: $TASK_ID"
+(( TASK_ID >= 1 && TASK_ID <= ${#SAMPLE_DIRS[@]} )) || fail_task "Invalid sample number: $TASK_ID" 
 
 SAMPLE_DIR="${SAMPLE_DIRS[$((TASK_ID - 1))]}"
 SAMPLE="$(basename "$SAMPLE_DIR")"
